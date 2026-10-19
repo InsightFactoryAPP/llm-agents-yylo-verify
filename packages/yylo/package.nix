@@ -1,8 +1,11 @@
 {
+  bash,
   buildNpmPackage,
   fetchurl,
   lib,
+  makeWrapper,
   mkUpdater,
+  nodejs,
   runCommand,
   versionCheckHook,
   versionCheckHomeHook,
@@ -44,14 +47,34 @@ buildNpmPackage {
   # src/, which the tarball does not include).
   NPM_CONFIG_IGNORE_SCRIPTS = "true";
 
-  # patchShebangs rewrites the bash shebang of the shipped yylo.sh/ypl.sh
-  # wrapper bins, so the default npm bin links work unmodified.
+  nativeBuildInputs = [ makeWrapper ];
+
+  # The shipped bins are bash wrappers (yylo.sh/ypl.sh) that exec the real node
+  # CLI, so the default node shims would feed bash to node. Wrap them through
+  # their own script with node and bash on PATH; feedback-yylo is a plain .mjs
+  # and keeps its default shim.
+  postFixup = ''
+    wrapBin() {
+      rm -f "$out/bin/$1"
+      makeWrapper "$out/lib/node_modules/@yylo/cli/dist/bin/$2" "$out/bin/$1" \
+        --prefix PATH : ${
+          lib.makeBinPath [
+            nodejs
+            bash
+          ]
+        }
+    }
+    wrapBin yylo yylo.sh
+    wrapBin yy yylo.sh
+    wrapBin ypl ypl.sh
+  '';
 
   doInstallCheck = true;
   nativeInstallCheckInputs = [
     versionCheckHook
     versionCheckHomeHook
   ];
+  versionCheckProgramArg = "--version";
 
   passthru.category = "AI Coding Agents";
   passthru.updater = mkUpdater {
