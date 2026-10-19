@@ -1,0 +1,63 @@
+name: yylo verify (temporary fork check)
+on: push
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Nix
+        uses: NixOS/nix-installer-action@main
+      - name: Compute npmDepsHash (fixed-output retry) and build
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4; do
+            if out=$(nix build --accept-flake-config .#yylo --no-link 2>&1); then
+              echo "BUILD OK on attempt $i"
+              echo "$out" | tail -5
+              break
+            fi
+            echo "--- attempt $i build output (tail) ---"
+            printf '%s\n' "$out" | tail -40
+            got=$(printf '%s\n' "$out" | grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' | head -1 | awk '{print $2}')
+            if [ -z "$got" ]; then
+              echo "no npmDeps hash in output — real build failure"
+              exit 1
+            fi
+            echo "attempt $i: swapping npmDepsHash=$got"
+            python3 - "$got" <<'EOF'
+          import json, sys
+          p = 'packages/yylo/hashes.json'
+          d = json.load(open(p))
+          d['npmDepsHash'] = sys.argv[1]
+          open(p, 'w').write(json.dumps(d, indent=2) + "\n")
+          EOF
+            if [ "$i" = "4" ]; then echo "hash retry exhausted"; exit 1; fi
+          done
+      - name: Sample run output
+        run: |
+          nix run --accept-flake-config .#yylo -- --version
+      - name: Flake check (eval only)
+        run: nix flake check --accept-flake-config --no-build
+      - name: Format
+        run: |
+          nix fmt || true
+          git diff --stat || true
+      - name: Regenerate README package docs
+        run: |
+          chmod +x scripts/generate-package-docs.nu
+          ./scripts/generate-package-docs.nu
+          git diff --stat README.md || true
+      - name: ast-grep scan (report only)
+        run: |
+          nix run nixpkgs#ast-grep -- scan packages || true
+      - name: Commit computed hashes, formatting and docs
+        run: |
+          git config user.name "InsightFactoryAPP"
+          git config user.email "168487014+InsightFactoryAPP@users.noreply.github.com"
+          git add -A
+          git commit -m "yylo: computed hashes + regenerated docs" || echo "nothing to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
