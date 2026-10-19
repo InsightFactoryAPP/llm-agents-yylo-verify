@@ -1,7 +1,10 @@
 {
   bash,
   buildNpmPackage,
+  coreutils,
   fetchurl,
+  gnugrep,
+  gnused,
   lib,
   makeWrapper,
   mkUpdater,
@@ -67,6 +70,9 @@ buildNpmPackage {
           lib.makeBinPath [
             nodejs
             bash
+            coreutils
+            gnugrep
+            gnused
           ]
         }
     }
