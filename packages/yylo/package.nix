@@ -54,6 +54,12 @@ buildNpmPackage {
   # their own script with node and bash on PATH; feedback-yylo is a plain .mjs
   # and keeps its default shim.
   postFixup = ''
+    # /usr/bin/env is absent in the build sandbox and patchShebangs skips the
+    # shipped wrappers, so pin their interpreter explicitly.
+    substituteInPlace \
+      $out/lib/node_modules/@yylo/cli/dist/bin/yylo.sh \
+      $out/lib/node_modules/@yylo/cli/dist/bin/ypl.sh \
+      --replace-fail '#!/usr/bin/env bash' '#!${lib.getExe bash}'
     wrapBin() {
       rm -f "$out/bin/$1"
       makeWrapper "$out/lib/node_modules/@yylo/cli/dist/bin/$2" "$out/bin/$1" \
