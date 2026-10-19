@@ -1,5 +1,7 @@
 name: yylo verify (temporary fork check)
-on: push
+on:
+  push:
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
